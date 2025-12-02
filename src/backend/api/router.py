@@ -3,7 +3,7 @@ API Router - FastAPI routes for the multi-agent system.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -30,6 +30,7 @@ class ChatResponse(BaseModel):
     sql: Optional[str] = None
     data: Optional[str] = None
     visualization_url: Optional[str] = None
+    agents_called: Optional[List[str]] = None
 
 
 @router.get("/health")
@@ -64,23 +65,20 @@ async def list_tables():
     """List all database tables."""
     try:
         result = await run_workflow("List all tables in the database")
-        tables = []
-        if result.get("data"):
-            tables = [t.strip() for t in result["data"].split("\n") if t.strip()]
-        return {"tables": tables}
+        return {"tables": result.get("data", "")}
 
     except Exception as e:
-        logger.error("Error: %s", e)
+        logger.error("Tables error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/schema/{table_name}")
 async def get_table_schema(table_name: str):
-    """Get schema for a table."""
+    """Get schema for a specific table."""
     try:
-        result = await run_workflow("Get schema for table {}".format(table_name))
+        result = await run_workflow(f"Get schema for table {table_name}")
         return {"table": table_name, "schema": result.get("data", "")}
 
     except Exception as e:
-        logger.error("Error: %s", e)
+        logger.error("Schema error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

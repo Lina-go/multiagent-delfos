@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     powerbi_workspace_id: Optional[str] = None
     powerbi_report_id: Optional[str] = None
 
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"
 
 
 @lru_cache
