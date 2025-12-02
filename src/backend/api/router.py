@@ -1,11 +1,5 @@
 """
 API Router - FastAPI routes for the multi-agent system.
-
-Endpoints:
-- POST /chat - Process a chat message through multi-agent workflow
-- GET /health - Health check
-- GET /tables - List database tables
-- GET /schema/{table} - Get table schema
 """
 
 import logging
@@ -20,15 +14,16 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Pydantic models for FastAPI
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
+
     message: str
     user_id: Optional[str] = "anonymous"
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
+
     success: bool
     message: str
     intent: Optional[str] = None
@@ -44,40 +39,23 @@ async def health_check():
         "status": "healthy",
         "service": "delfos-multi-agent",
         "version": "0.1.0",
-        "agents": ["Coordinator", "SQLAgent", "Validator", "VizAgent"],
     }
 
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    """
-    Process a chat message through the multi-agent workflow.
-
-    Flow (all agents use LLM):
-    1. Coordinator: Analiza intent y contexto
-    2. SQLAgent: Genera SQL y ejecuta via MCP
-    3. Validator: Revisa SQL por seguridad
-    4. VizAgent: Crea visualización via MCP (si aplica)
-    """
-    logger.info(f"Chat request: {request.message[:50]}...")
+    """Process a chat message through the multi-agent workflow."""
+    logger.info("Chat request: %s", request.message[:50])
 
     try:
         result = await run_workflow(
             message=request.message,
             user_id=request.user_id,
         )
-
-        return ChatResponse(
-            success=result.get("success", False),
-            message=result.get("message", ""),
-            intent=result.get("intent"),
-            sql=result.get("sql"),
-            data=result.get("data"),
-            visualization_url=result.get("visualization_url"),
-        )
+        return ChatResponse(**result)
 
     except Exception as e:
-        logger.error(f"Chat error: {e}", exc_info=True)
+        logger.error("Chat error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -85,11 +63,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
 async def list_tables():
     """List all database tables."""
     try:
-        # Use workflow to list tables
         result = await run_workflow("List all tables in the database")
-        return {"tables": result.get("data", "").split("\n") if result.get("data") else []}
+        tables = []
+        if result.get("data"):
+            tables = [t.strip() for t in result["data"].split("\n") if t.strip()]
+        return {"tables": tables}
+
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error("Error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -97,8 +78,9 @@ async def list_tables():
 async def get_table_schema(table_name: str):
     """Get schema for a table."""
     try:
-        result = await run_workflow(f"Get the schema for table {table_name}")
+        result = await run_workflow("Get schema for table {}".format(table_name))
         return {"table": table_name, "schema": result.get("data", "")}
+
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error("Error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
