@@ -1,0 +1,113 @@
+{
+  "id": "financial-sql-team",
+  "team_id": "team-financial",
+  "name": "Financial SQL Analysis Team",
+  "status": "active",
+  "description": "Multi-agent team for SQL queries and visualization on FinancialDB using Coordinator pattern",
+  "database": {
+    "name": "FinancialDB",
+    "schema": "dbo",
+    "type": "Azure SQL"
+  },
+  "agents": [
+    {
+      "name": "CoordinatorAgent",
+      "role": "coordinator",
+      "description": "Central coordinator that analyzes user intent and routes to specialist agents",
+      "deployment_name": "gpt-4.1-mini",
+      "capabilities": [
+        "intent_detection",
+        "task_routing",
+        "response_aggregation",
+        "language_detection"
+      ],
+      "use_mcp": false
+    },
+    {
+      "name": "SQLAgent",
+      "role": "specialist",
+      "description": "Expert in generating SQL queries for FinancialDB",
+      "deployment_name": "gpt-4.1-mini",
+      "capabilities": [
+        "sql_generation",
+        "schema_knowledge",
+        "query_optimization"
+      ],
+      "use_mcp": true,
+      "mcp_tools": [
+        "list_tables",
+        "get_table_schema",
+        "get_table_relationships"
+      ]
+    },
+    {
+      "name": "ValidatorAgent",
+      "role": "critic",
+      "description": "Reviews SQL queries for security, correctness, and optimization",
+      "deployment_name": "gpt-4.1-mini",
+      "capabilities": [
+        "sql_validation",
+        "security_check",
+        "schema_validation",
+        "optimization_suggestions"
+      ],
+      "use_mcp": false
+    },
+    {
+      "name": "VisualizationAgent",
+      "role": "specialist",
+      "description": "Handles chart selection and Power BI URL generation",
+      "deployment_name": "gpt-4.1-mini",
+      "capabilities": [
+        "chart_type_detection",
+        "data_formatting",
+        "powerbi_integration"
+      ],
+      "use_mcp": true,
+      "mcp_tools": [
+        "insert_agent_output_batch",
+        "generate_powerbi_url"
+      ]
+    }
+  ],
+  "workflows": {
+    "data_query": {
+      "description": "Process a data query request",
+      "steps": [
+        "CoordinatorAgent: Detect intent",
+        "SQLAgent: Generate query",
+        "ValidatorAgent: Review query",
+        "Execute via MCP",
+        "CoordinatorAgent: Format response"
+      ]
+    },
+    "visualization": {
+      "description": "Process a visualization request",
+      "steps": [
+        "CoordinatorAgent: Detect intent",
+        "SQLAgent: Generate query",
+        "ValidatorAgent: Review query (viz mode)",
+        "Execute via MCP",
+        "VisualizationAgent: Create chart",
+        "CoordinatorAgent: Format response with URL"
+      ]
+    }
+  },
+  "example_queries": [
+    {
+      "query": "Muéstrame el balance por tipo de cuenta",
+      "intent": "visualization",
+      "expected_chart": "Bar"
+    },
+    {
+      "query": "¿Cuántos clientes hay por tipo?",
+      "intent": "data_query",
+      "expected_tables": ["dbo.Customers"]
+    },
+    {
+      "query": "Show me a pie chart of loans by type",
+      "intent": "visualization",
+      "expected_chart": "PieChart"
+    }
+  ]
+}
