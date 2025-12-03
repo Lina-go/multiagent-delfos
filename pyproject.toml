@@ -8,14 +8,11 @@ dependencies = [
     # Microsoft Agent Framework
     "agent-framework>=0.1.0",
     "agent-framework-azure-ai>=0.1.0",
-
     # Azure Identity for authentication (az login)
     "azure-identity>=1.19.0",
-
     # FastAPI & Server
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-
     # Configuration
     "python-dotenv>=1.0.0",
     "pydantic>=2.10.0",
