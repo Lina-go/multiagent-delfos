@@ -12,8 +12,6 @@ logging.basicConfig(
     force=True,
 )
 
-for lib in ["httpx", "httpcore", "azure", "urllib3"]:
-    logging.getLogger(lib).setLevel(logging.WARNING)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +24,9 @@ settings = get_settings()
 
 log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
 logging.getLogger("src").setLevel(log_level)
+
+# Silenciar warnings de provider del agent_framework
+logging.getLogger("agent_framework").setLevel(logging.WARNING)
 
 app = FastAPI(
     title="Delfos Multi-Agent System",

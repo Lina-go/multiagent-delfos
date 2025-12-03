@@ -5,6 +5,7 @@ Orquestador del flujo de trabajo multi-agente con lógica condicional.
 import logging
 import json
 import re
+import time
 from typing import Dict, Any
 
 from azure.identity.aio import DefaultAzureCredential
@@ -18,6 +19,7 @@ from agent_framework_azure_ai import AzureAIAgentClient
 from src.backend.config.settings import get_settings
 from src.backend.config.prompts import AgentPrompts
 from src.backend.schemas import ChatResponse, SQLResult, VizResult
+from src.backend.logger import AgentLogger
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,10 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
     """
     settings = get_settings()
     response = ChatResponse(success=False, message="Iniciando...", errors=[])
-    
+
+    agent_logger = AgentLogger()
+    agent_logger.start_session(user_id=user_id, user_message=message)
+
     credential = DefaultAzureCredential()
 
     try:
@@ -72,6 +77,7 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
             url=settings.mcp_server_url,
             timeout=settings.mcp_timeout,
             sse_read_timeout=settings.mcp_sse_timeout,
+            approval_mode="never_require",
         ) as mcp:
             
             async with AzureAIAgentClient(
@@ -89,9 +95,19 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                 )
                 
                 logger.info("Ejecutando IntentAgent...")
+                start_time = time.time()
                 raw_intent = await run_single_agent(intent_agent, message)
+                elapsed_ms = (time.time() - start_time) * 1000
                 intent_data = JSONParser.extract_json(raw_intent)
-                
+
+                agent_logger.log_agent_response(
+                    agent_name="IntentAgent",
+                    raw_response=raw_intent,
+                    parsed_response=intent_data,
+                    input_text=message,
+                    execution_time_ms=elapsed_ms,
+                )
+
                 intent = intent_data.get("intent", "nivel_puntual")
                 response.intent = intent
                 logger.info(f"Intent detectado: {intent}")
@@ -106,10 +122,19 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                 )
                 
                 logger.info("Ejecutando SQLAgent...")
-                # Usamos el mensaje original del usuario
+                start_time = time.time()
                 raw_sql_result = await run_single_agent(sql_agent, message)
+                elapsed_ms = (time.time() - start_time) * 1000
                 sql_json = JSONParser.extract_json(raw_sql_result)
-                
+
+                agent_logger.log_agent_response(
+                    agent_name="SQLAgent",
+                    raw_response=raw_sql_result,
+                    parsed_response=sql_json,
+                    input_text=message,
+                    execution_time_ms=elapsed_ms,
+                )
+
                 if sql_json and "resultados" in sql_json:
                     response.sql_data = SQLResult(**sql_json)
                     response.message = response.sql_data.resumen
@@ -131,9 +156,19 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                     )
 
                     viz_input = json.dumps(sql_json, indent=2, ensure_ascii=False)
+                    start_time = time.time()
                     raw_viz_result = await run_single_agent(viz_agent, viz_input)
+                    elapsed_ms = (time.time() - start_time) * 1000
                     viz_json = JSONParser.extract_json(raw_viz_result)
-                    
+
+                    agent_logger.log_agent_response(
+                        agent_name="VizAgent",
+                        raw_response=raw_viz_result,
+                        parsed_response=viz_json,
+                        input_text=viz_input,
+                        execution_time_ms=elapsed_ms,
+                    )
+
                     if viz_json and "powerbi_url" in viz_json:
                         response.viz_data = VizResult(**viz_json)
                         response.message += f"\nVisualización generada: {response.viz_data.powerbi_url}"
@@ -149,6 +184,11 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
         response.errors.append(str(e))
 
     finally:
+        agent_logger.end_session(
+            success=response.success,
+            final_message=response.message,
+            errors=response.errors if response.errors else None,
+        )
         await credential.close()
 
     return response.model_dump()

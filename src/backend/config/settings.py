@@ -27,8 +27,8 @@ class Settings(BaseSettings):
 
     # MCP Server
     mcp_server_url: str = "https://func-mcp-n2z2m7tmh3kvk.azurewebsites.net/mcp"
-    mcp_timeout: int = 30
-    mcp_sse_timeout: int = 20
+    mcp_timeout: int = 60
+    mcp_sse_timeout: int = 45
 
     # Power BI
     powerbi_workspace_id: Optional[str] = None
