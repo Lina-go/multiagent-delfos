@@ -24,9 +24,9 @@ services:
     volumes:
       # Mount logs directory to persist logs
       - ./logs:/app/logs
-      # Mount Azure credentials if using Azure CLI (optional, comment out if using service principal)
-      # - ~/.azure:/root/.azure:ro
-      - C:/Users/GomezLina(BipGroup)/.azure:/root/.azure:ro
+      # Mount Azure credentials if using Azure CLI (for local development)
+      # Use full Windows path - adjust if your username is different
+      - C:/Users/GomezLina(BipGroup)/.azure:/root/.azure:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
