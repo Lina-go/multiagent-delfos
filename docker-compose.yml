@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  delfos-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delfos-multi-agent
+    ports:
+      - "8000:8000"
+    environment:
+      # Azure AI Foundry
+      - AZURE_AI_PROJECT_ENDPOINT=${AZURE_AI_PROJECT_ENDPOINT}
+      - AZURE_AI_MODEL_DEPLOYMENT_NAME=${AZURE_AI_MODEL_DEPLOYMENT_NAME:-gpt-4o}
+      # MCP Server
+      - MCP_SERVER_URL=${MCP_SERVER_URL}
+      - MCP_TIMEOUT=${MCP_TIMEOUT:-60}
+      - MCP_SSE_TIMEOUT=${MCP_SSE_TIMEOUT:-45}
+      # Power BI (optional)
+      - POWERBI_WORKSPACE_ID=${POWERBI_WORKSPACE_ID:-}
+      - POWERBI_REPORT_ID=${POWERBI_REPORT_ID:-}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      # Mount logs directory to persist logs
+      - ./logs:/app/logs
+      # Mount Azure credentials if using Azure CLI (optional, comment out if using service principal)
+      # - ~/.azure:/root/.azure:ro
+      - C:/Users/GomezLina(BipGroup)/.azure:/root/.azure:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

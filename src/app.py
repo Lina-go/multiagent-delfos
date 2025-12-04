@@ -16,8 +16,8 @@ logging.basicConfig(
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.backend.api.router import router
-from src.backend.config.settings import get_settings
+from src.api.router import router
+from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -56,3 +56,4 @@ async def root():
         "azure_endpoint": settings.azure_ai_project_endpoint,
         "log_level": settings.log_level,
     }
+

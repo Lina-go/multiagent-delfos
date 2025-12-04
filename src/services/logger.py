@@ -1,4 +1,4 @@
-"""Sistema de logging para guardar respuestas de agentes en archivos markdown."""
+"""Logging system for saving agent responses to markdown files."""
 
 import json
 from datetime import datetime
@@ -8,20 +8,21 @@ from typing import Any, Optional
 
 class AgentLogger:
     """
-    Logger que guarda las respuestas de cada agente en archivos markdown.
+    Logger that saves each agent's responses to markdown files.
     """
 
     def __init__(self, base_dir: Optional[str] = None) -> None:
         """
-        Inicializa el logger.
+        Initialize the logger.
 
         Args:
-            base_dir: Directorio base para los logs. Por defecto 'logs' en la raíz.
+            base_dir: Base directory for logs. Defaults to 'logs' in the root.
         """
         if base_dir:
             self.base_dir = Path(base_dir)
         else:
-            self.base_dir = Path(__file__).parent.parent.parent.parent / "logs"
+            # Calculate path to project root: src/services/logger.py -> project root
+            self.base_dir = Path(__file__).parent.parent.parent / "logs"
 
         self.session_dir: Optional[Path] = None
         self.agent_counter: int = 0
@@ -29,14 +30,14 @@ class AgentLogger:
 
     def start_session(self, user_id: str = "anonymous", user_message: str = "") -> str:
         """
-        Inicia una nueva sesión creando un directorio con timestamp.
+        Start a new session by creating a timestamped directory.
 
         Args:
-            user_id: ID del usuario.
-            user_message: Mensaje original del usuario.
+            user_id: User ID.
+            user_message: Original user message.
 
         Returns:
-            Path del directorio de la sesión.
+            Path of the session directory.
         """
         self.session_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.session_dir = self.base_dir / self.session_timestamp
@@ -79,24 +80,24 @@ Los archivos de respuesta de cada agente están en este directorio.
         execution_time_ms: Optional[float] = None,
     ) -> str:
         """
-        Guarda la respuesta de un agente en un archivo markdown.
+        Save an agent's response to a markdown file.
 
         Args:
-            agent_name: Nombre del agente (ej: "IntentAgent").
-            raw_response: Respuesta cruda del agente.
-            parsed_response: Respuesta parseada como diccionario.
-            input_text: Texto de entrada que recibió el agente.
-            execution_time_ms: Tiempo de ejecución en milisegundos.
+            agent_name: Agent name (e.g., "IntentAgent").
+            raw_response: Raw agent response.
+            parsed_response: Parsed response as dictionary.
+            input_text: Input text received by the agent.
+            execution_time_ms: Execution time in milliseconds.
 
         Returns:
-            Path del archivo creado.
+            Path of the created file.
 
         Raises:
-            RuntimeError: Si no se ha iniciado una sesión.
+            RuntimeError: If a session has not been started.
         """
         if not self.session_dir:
             raise RuntimeError(
-                "Debe llamar a start_session() antes de log_agent_response()"
+                "Must call start_session() before log_agent_response()"
             )
 
         self.agent_counter += 1
@@ -157,12 +158,12 @@ Los archivos de respuesta de cada agente están en este directorio.
         errors: Optional[list] = None,
     ) -> None:
         """
-        Finaliza la sesión agregando un resumen.
+        End the session by adding a summary.
 
         Args:
-            success: Si el workflow fue exitoso.
-            final_message: Mensaje final del workflow.
-            errors: Lista de errores si los hubo.
+            success: Whether the workflow was successful.
+            final_message: Final workflow message.
+            errors: List of errors if any.
         """
         if not self.session_dir:
             return
@@ -194,3 +195,4 @@ Los archivos de respuesta de cada agente están en este directorio.
 
         with open(session_file, "a", encoding="utf-8") as f:
             f.write(summary)
+

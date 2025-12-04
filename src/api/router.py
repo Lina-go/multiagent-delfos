@@ -1,11 +1,10 @@
 """
-src/backend/api/router.py
 API Router - FastAPI routes.
 """
 import logging
 from fastapi import APIRouter, HTTPException
-from src.backend.workflow import run_workflow
-from src.backend.schemas import ChatRequest, ChatResponse
+from src.workflow import run_workflow
+from src.models import ChatRequest, ChatResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,3 +32,4 @@ async def chat(request: ChatRequest) -> ChatResponse:
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+

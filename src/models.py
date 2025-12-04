@@ -1,6 +1,5 @@
 """
-src/backend/schemas.py
-Modelos Pydantic para definir la estructura de datos entre el API y el Workflow.
+Pydantic models for defining data structure between API and Workflow.
 """
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
@@ -28,10 +27,20 @@ class VizResult(BaseModel):
     data_points: List[Dict[str, Any]]
     powerbi_url: str
 
+class AgentOutput(BaseModel):
+    """Output from an individual agent."""
+    agent_name: str
+    raw_response: str
+    parsed_response: Optional[Dict[str, Any]] = None
+    execution_time_ms: Optional[float] = None
+    input_text: Optional[str] = None
+
 class ChatResponse(BaseModel):
     success: bool
     message: str
     intent: Optional[str] = None
     sql_data: Optional[SQLResult] = None
     viz_data: Optional[VizResult] = None
+    agent_outputs: List[AgentOutput] = []  # Outputs from each executed agent
     errors: List[str] = []
+
