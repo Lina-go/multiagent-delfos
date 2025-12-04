@@ -93,8 +93,13 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                 
                 logger.info("Executing SQLAgent...")
                 start_time = time.time()
-                # Make the SQLAgent input explicit - it should generate and execute SQL, not classify intents
-                sql_input = f"Genera y ejecuta una consulta SQL para responder: {message}"
+
+                sql_input = (
+                    f"TAREA: Genera y ejecuta una consulta SQL para responder la siguiente pregunta. "
+                    f"NO clasifiques intents. NO devuelvas información sobre intents. "
+                    f"Solo genera SQL, ejecútalo y devuelve los resultados en formato JSON. "
+                    f"Pregunta del usuario: {message}"
+                )
                 raw_sql_result = await run_single_agent(sql_agent, sql_input)
                 elapsed_ms = (time.time() - start_time) * 1000
                 sql_json = JSONParser.extract_json(raw_sql_result)
