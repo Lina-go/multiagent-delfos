@@ -75,6 +75,7 @@ AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-4o
 MCP_SERVER_URL=https://func-mcp-n2z2m7tmh3kvk.azurewebsites.net/mcp
 MCP_TIMEOUT=60
 MCP_SSE_TIMEOUT=45
+MCP_CHART_SERVER_URL=https://mcp-chart-server.calmocean-fbbefe3a.westus2.azurecontainerapps.io
 LOG_LEVEL=INFO
 ```
 
@@ -169,5 +170,5 @@ The application uses `DefaultAzureCredential` which tries multiple authenticatio
 - Azure AI Foundry
 - FastAPI
 - MCP (Model Context Protocol)
-- Power BI
+- MCP Chart Server (for chart generation)
 - Docker

@@ -29,6 +29,8 @@ class VizResult(BaseModel):
     data_points: List[Dict[str, Any]]
     powerbi_url: str
     run_id: Optional[str] = None
+    image_base64: Optional[str] = None  # Base64 encoded chart image
+    image_url: Optional[str] = None  # URL to the chart image
 
 class AgentOutput(BaseModel):
     """Output from an individual agent."""

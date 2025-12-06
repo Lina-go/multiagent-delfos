@@ -2,11 +2,13 @@
 API Router - FastAPI routes.
 """
 import logging
+import json
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Response, Query
 from fastapi.responses import Response as FastAPIResponse
 from src.workflow import run_workflow
 from src.models import ChatRequest, ChatResponse
-from src.services.powerbi_image import get_powerbi_image
+from src.services.chart_image import get_chart_image
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,7 +40,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
 @router.get("/graph/{run_id}")
 async def get_graph(
     run_id: str,
-    tipo_grafico: str = Query(..., description="Chart type from VizResult: 'pie', 'bar', 'line', or 'stackedbar'")
+    tipo_grafico: str = Query(..., description="Chart type from VizResult: 'pie', 'bar', 'line', or 'stackedbar'"),
+    data: Optional[str] = Query(None, description="Optional JSON string of data points array")
 ) -> Response:
     """
     Retrieve a graph image for a given run_id.
@@ -47,6 +50,7 @@ async def get_graph(
         run_id: The run_id from the visualization result
         tipo_grafico: Chart type from VizResult ("pie", "bar", "line", "stackedbar")
                       This should match the value from response.viz_data.tipo_grafico
+        data: Optional JSON string of data points array. If provided, will be passed to chart server.
         
     Returns:
         Response: Image data (PNG) with appropriate content-type
@@ -55,7 +59,19 @@ async def get_graph(
         HTTPException: 404 if image not found, 500 if error retrieving
     """
     try:
-        image_data = await get_powerbi_image(run_id, tipo_grafico)
+        # Parse data points if provided
+        data_points = None
+        if data:
+            try:
+                data_points = json.loads(data)
+                if not isinstance(data_points, list):
+                    logger.warning(f"Data parameter is not a list, ignoring: {type(data_points)}")
+                    data_points = None
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse data parameter as JSON: {e}")
+                data_points = None
+        
+        image_data = await get_chart_image(run_id, tipo_grafico, data_points)
         
         if image_data is None:
             raise HTTPException(

@@ -16,9 +16,8 @@ services:
       - MCP_SERVER_URL=${MCP_SERVER_URL}
       - MCP_TIMEOUT=${MCP_TIMEOUT:-60}
       - MCP_SSE_TIMEOUT=${MCP_SSE_TIMEOUT:-45}
-      # Power BI (optional)
-      - POWERBI_WORKSPACE_ID=${POWERBI_WORKSPACE_ID:-}
-      - POWERBI_REPORT_ID=${POWERBI_REPORT_ID:-}
+      # MCP Chart Server
+      - MCP_CHART_SERVER_URL=${MCP_CHART_SERVER_URL:-https://mcp-chart-server.calmocean-fbbefe3a.westus2.azurecontainerapps.io}
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:

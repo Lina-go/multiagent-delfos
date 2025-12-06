@@ -30,15 +30,15 @@ class Settings(BaseSettings):
     sql_agent_model: str
     viz_agent_model: str
     format_agent_model: str
+    graph_executor_model: str = "gpt-4o-mini"
 
     # MCP Server
     mcp_server_url: str = "https://func-mcp-n2z2m7tmh3kvk.azurewebsites.net/mcp"
-    mcp_timeout: int = 60
-    mcp_sse_timeout: int = 45
-
-    # Power BI
-    powerbi_workspace_id: Optional[str] = None
-    powerbi_report_id: Optional[str] = None
+    mcp_timeout: int = 45  # Reduced from 60 for faster failure detection
+    mcp_sse_timeout: int = 30  # Reduced from 45 for faster failure detection
+    
+    # MCP Chart Server
+    mcp_chart_server_url: str = "https://mcp-chart-server.calmocean-fbbefe3a.westus2.azurecontainerapps.io/mcp"
 
     log_level: str = "DEBUG"
 
