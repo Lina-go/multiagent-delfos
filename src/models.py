@@ -11,6 +11,8 @@ class ChatRequest(BaseModel):
 class IntentResult(BaseModel):
     user_question: str
     intent: str
+    tipo_patron: Optional[str] = None  # A, B, C, D, E, F, G, H, I, J, K, L, M, N
+    arquetipo: Optional[str] = None  # Comparación, Relación, Proyección, Simulación
     razon: Optional[str] = None
 
 class SQLResult(BaseModel):
