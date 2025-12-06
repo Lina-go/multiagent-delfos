@@ -23,7 +23,13 @@ class Settings(BaseSettings):
 
     # Azure AI Foundry
     azure_ai_project_endpoint: str = ""
-    azure_ai_model_deployment_name: str = "gpt-4o"
+    azure_ai_model_deployment_name: str = "gpt-4o"  # Legacy, kept for compatibility
+    
+    # Per-agent model configurations (required in .env)
+    intent_agent_model: str
+    sql_agent_model: str
+    viz_agent_model: str
+    format_agent_model: str
 
     # MCP Server
     mcp_server_url: str = "https://func-mcp-n2z2m7tmh3kvk.azurewebsites.net/mcp"

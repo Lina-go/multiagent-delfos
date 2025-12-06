@@ -41,16 +41,15 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
             approval_mode="never_require",
         ) as mcp:
             
+            # ---------------------------------------------------------
+            # STEP 1: INTENT DETECTION
+            # ---------------------------------------------------------
             async with AzureAIAgentClient(
                 project_endpoint=settings.azure_ai_project_endpoint,
-                model_deployment_name=settings.azure_ai_model_deployment_name,
+                model_deployment_name=settings.intent_agent_model,
                 async_credential=credential,
-            ) as client:
-                
-                # ---------------------------------------------------------
-                # STEP 1: INTENT DETECTION
-                # ---------------------------------------------------------
-                intent_agent = client.create_agent(
+            ) as intent_client:
+                intent_agent = intent_client.create_agent(
                     name="IntentAgent",
                     instructions=AgentPrompts.INTENT_AGENT,
                 )
@@ -82,10 +81,15 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                 response.intent = intent
                 logger.info(f"Intent detected: {intent}")
 
-                # ---------------------------------------------------------
-                # STEP 2: SQL GENERATION
-                # ---------------------------------------------------------
-                sql_agent = client.create_agent(
+            # ---------------------------------------------------------
+            # STEP 2: SQL GENERATION
+            # ---------------------------------------------------------
+            async with AzureAIAgentClient(
+                project_endpoint=settings.azure_ai_project_endpoint,
+                model_deployment_name=settings.sql_agent_model,
+                async_credential=credential,
+            ) as sql_client:
+                sql_agent = sql_client.create_agent(
                     name="SQLAgent",
                     instructions=AgentPrompts.SQL_AGENT,
                     tools=mcp,
@@ -143,19 +147,30 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                     logger.warning(f"SQLAgent failed - no valid results returned. Response: {raw_sql_result[:200]}...")
                     return response.model_dump()
 
-                # ---------------------------------------------------------
-                # STEP 3: VISUALIZATION (VIZ AGENT - Conditional)
-                # ---------------------------------------------------------
-                if intent == "requiere_visualizacion" and response.sql_data:
-                    logger.info("Starting VizAgent (condition met)...")
-                    
-                    viz_agent = client.create_agent(
+            # ---------------------------------------------------------
+            # STEP 3: VISUALIZATION (VIZ AGENT - Conditional)
+            # ---------------------------------------------------------
+            if intent == "requiere_visualizacion" and response.sql_data:
+                logger.info("Starting VizAgent (condition met)...")
+                
+                async with AzureAIAgentClient(
+                    project_endpoint=settings.azure_ai_project_endpoint,
+                    model_deployment_name=settings.viz_agent_model,
+                    async_credential=credential,
+                ) as viz_client:
+                    viz_agent = viz_client.create_agent(
                         name="VizAgent",
                         instructions=AgentPrompts.VIZ_AGENT,
                         tools=mcp, 
                     )
 
-                    viz_input = json.dumps(sql_json, indent=2, ensure_ascii=False)
+                    # Include user_id in the input for VizAgent
+                    viz_input_data = {
+                        "user_id": user_id,
+                        "sql_results": sql_json,
+                        "original_question": message,
+                    }
+                    viz_input = json.dumps(viz_input_data, indent=2, ensure_ascii=False)
                     start_time = time.time()
                     raw_viz_result = await run_single_agent(viz_agent, viz_input)
                     elapsed_ms = (time.time() - start_time) * 1000
@@ -179,12 +194,88 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                     ))
 
                     if viz_json and "powerbi_url" in viz_json:
+                        # Validate that the URL is not a placeholder
+                        powerbi_url = viz_json.get("powerbi_url", "")
+                        if not powerbi_url.startswith("https://") or "URL_GENERADO" in powerbi_url or "URL_REAL" in powerbi_url:
+                            logger.warning(
+                                f"VizAgent returned a placeholder URL instead of a real one: {powerbi_url}. "
+                                "The agent may not have called the MCP tools correctly."
+                            )
                         response.viz_data = VizResult(**viz_json)
-                        response.message += f"\nVisualization generated: {response.viz_data.powerbi_url}"
                     else:
                         logger.warning("VizAgent did not return a valid URL.")
 
-                response.success = True
+            # ---------------------------------------------------------
+            # STEP 4: FORMAT RESPONSE (FORMAT AGENT - Always runs if successful)
+            # ---------------------------------------------------------
+            if response.success and response.sql_data:
+                logger.info("Starting FormatAgent to generate user-friendly message...")
+                
+                async with AzureAIAgentClient(
+                    project_endpoint=settings.azure_ai_project_endpoint,
+                    model_deployment_name=settings.format_agent_model,
+                    async_credential=credential,
+                ) as format_client:
+                    format_agent = format_client.create_agent(
+                        name="FormatAgent",
+                        instructions=AgentPrompts.FORMAT_AGENT,
+                    )
+
+                    # Prepare input for FormatAgent with all available data
+                    format_input_data = {
+                        "pregunta_original": message,
+                        "intent": intent,
+                        "sql_data": {
+                            "pregunta_original": response.sql_data.pregunta_original,
+                            "sql": response.sql_data.sql,
+                            "tablas": response.sql_data.tablas,
+                            "resultados": response.sql_data.resultados,
+                            "total_filas": response.sql_data.total_filas,
+                            "resumen": response.sql_data.resumen,
+                        }
+                    }
+                    
+                    if response.viz_data:
+                        format_input_data["viz_data"] = {
+                            "tipo_grafico": response.viz_data.tipo_grafico,
+                            "metric_name": response.viz_data.metric_name,
+                            "data_points": response.viz_data.data_points,
+                            "powerbi_url": response.viz_data.powerbi_url,
+                        }
+
+                    format_input = json.dumps(format_input_data, indent=2, ensure_ascii=False)
+                    start_time = time.time()
+                    formatted_message = await run_single_agent(format_agent, format_input)
+                    elapsed_ms = (time.time() - start_time) * 1000
+
+                    agent_logger.log_agent_response(
+                        agent_name="FormatAgent",
+                        raw_response=formatted_message,
+                        parsed_response=None,
+                        input_text=format_input,
+                        execution_time_ms=elapsed_ms,
+                    )
+
+                    # Add FormatAgent output to response
+                    response.agent_outputs.append(AgentOutput(
+                        agent_name="FormatAgent",
+                        raw_response=formatted_message,
+                        parsed_response=None,
+                        execution_time_ms=elapsed_ms,
+                        input_text=format_input,
+                    ))
+
+                    # Use the formatted message (clean it up if needed)
+                    formatted_message = formatted_message.strip()
+                    # Remove JSON markers if the agent accidentally included them
+                    if formatted_message.startswith("```"):
+                        lines = formatted_message.split("\n")
+                        formatted_message = "\n".join(lines[1:-1]) if len(lines) > 2 else formatted_message
+                    
+                    response.message = formatted_message if formatted_message else response.sql_data.resumen
+                    logger.info("FormatAgent generated user-friendly message")
+
+            response.success = True
 
     except Exception as e:
         logger.error(f"Error in workflow: {e}", exc_info=True)

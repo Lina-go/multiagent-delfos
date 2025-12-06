@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from agent_framework import SequentialBuilder, WorkflowOutputEvent
+from src.utils.retry import run_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -12,15 +13,26 @@ logger = logging.getLogger(__name__)
 async def run_single_agent(agent: Any, input_text: str) -> str:
     """
     Execute an agent in isolation using SequentialBuilder.
+    Includes automatic retry for rate limit errors.
     """
-    workflow = SequentialBuilder().participants([agent]).build()
-    all_texts = []
-    async for event in workflow.run_stream(input_text):
-        if isinstance(event, WorkflowOutputEvent):
-            for msg in event.data:
-                if hasattr(msg, "text") and msg.text:
-                    logger.debug(f"Agent message received: {msg.text[:200]}...")
-                    all_texts.append(msg.text)
-    logger.debug(f"Total messages received: {len(all_texts)}")
-    return all_texts[-1] if all_texts else ""
+    async def _execute_agent():
+        workflow = SequentialBuilder().participants([agent]).build()
+        all_texts = []
+        async for event in workflow.run_stream(input_text):
+            if isinstance(event, WorkflowOutputEvent):
+                for msg in event.data:
+                    if hasattr(msg, "text") and msg.text:
+                        logger.debug(f"Agent message received: {msg.text[:200]}...")
+                        all_texts.append(msg.text)
+        logger.debug(f"Total messages received: {len(all_texts)}")
+        return all_texts[-1] if all_texts else ""
+    
+    # Execute with retry logic for rate limits
+    return await run_with_retry(
+        _execute_agent,
+        max_retries=3,
+        initial_delay=5.0,
+        backoff_factor=2.0,
+        retry_on_rate_limit=True,
+    )
 
