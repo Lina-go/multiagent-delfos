@@ -12,7 +12,7 @@ from agent_framework_azure_ai import AzureAIAgentClient
 
 from src.config.settings import get_settings
 from src.config.prompts import AgentPrompts
-from src.models import ChatResponse, SQLResult, VizResult, AgentOutput
+from src.models import ChatResponse, SQLResult, VizResult, AgentOutput, FormattedResponse
 from src.services.logger import AgentLogger
 from src.agents.executor import run_single_agent
 from src.utils.json_parser import JSONParser
@@ -225,6 +225,8 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                     format_input_data = {
                         "pregunta_original": message,
                         "intent": intent,
+                        "tipo_patron": intent_data.get("tipo_patron"),
+                        "arquetipo": intent_data.get("arquetipo"),
                         "sql_data": {
                             "pregunta_original": response.sql_data.pregunta_original,
                             "sql": response.sql_data.sql,
@@ -241,6 +243,7 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                             "metric_name": response.viz_data.metric_name,
                             "data_points": response.viz_data.data_points,
                             "powerbi_url": response.viz_data.powerbi_url,
+                            "run_id": response.viz_data.run_id,
                         }
 
                     format_input = json.dumps(format_input_data, indent=2, ensure_ascii=False)
@@ -248,10 +251,13 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                     formatted_message = await run_single_agent(format_agent, format_input)
                     elapsed_ms = (time.time() - start_time) * 1000
 
+                    # Parse the JSON response from FormatAgent
+                    formatted_json = JSONParser.extract_json(formatted_message)
+                    
                     agent_logger.log_agent_response(
                         agent_name="FormatAgent",
                         raw_response=formatted_message,
-                        parsed_response=None,
+                        parsed_response=formatted_json,
                         input_text=format_input,
                         execution_time_ms=elapsed_ms,
                     )
@@ -260,20 +266,32 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                     response.agent_outputs.append(AgentOutput(
                         agent_name="FormatAgent",
                         raw_response=formatted_message,
-                        parsed_response=None,
+                        parsed_response=formatted_json,
                         execution_time_ms=elapsed_ms,
                         input_text=format_input,
                     ))
 
-                    # Use the formatted message (clean it up if needed)
-                    formatted_message = formatted_message.strip()
-                    # Remove JSON markers if the agent accidentally included them
-                    if formatted_message.startswith("```"):
-                        lines = formatted_message.split("\n")
-                        formatted_message = "\n".join(lines[1:-1]) if len(lines) > 2 else formatted_message
-                    
-                    response.message = formatted_message if formatted_message else response.sql_data.resumen
-                    logger.info("FormatAgent generated user-friendly message")
+                    # Create FormattedResponse from parsed JSON
+                    if formatted_json:
+                        try:
+                            response.formatted_response = FormattedResponse(**formatted_json)
+                            logger.info("FormatAgent generated structured response")
+                        except Exception as e:
+                            logger.warning(f"Error parsing FormattedResponse: {e}")
+                            # Fallback to old behavior
+                            formatted_message = formatted_message.strip()
+                            if formatted_message.startswith("```"):
+                                lines = formatted_message.split("\n")
+                                formatted_message = "\n".join(lines[1:-1]) if len(lines) > 2 else formatted_message
+                            response.message = formatted_message if formatted_message else response.sql_data.resumen
+                    else:
+                        # Fallback if JSON parsing fails
+                        formatted_message = formatted_message.strip()
+                        if formatted_message.startswith("```"):
+                            lines = formatted_message.split("\n")
+                            formatted_message = "\n".join(lines[1:-1]) if len(lines) > 2 else formatted_message
+                        response.message = formatted_message if formatted_message else response.sql_data.resumen
+                        logger.warning("FormatAgent did not return valid JSON, using fallback")
 
             response.success = True
 
