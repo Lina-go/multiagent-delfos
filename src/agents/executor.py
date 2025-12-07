@@ -29,8 +29,8 @@ async def run_single_agent(agent: Any, input_text: str) -> str:
     # Execute with retry logic for rate limits (optimized delays)
     return await run_with_retry(
         _execute_agent,
-        max_retries=2,  # Reduced from 3
-        initial_delay=2.0,  # Reduced from 5.0
+        max_retries=2,  
+        initial_delay=2.0, 
         backoff_factor=2.0,
         retry_on_rate_limit=True,
     )

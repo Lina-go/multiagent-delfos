@@ -8,11 +8,7 @@ import sys
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    stream=sys.stdout,
-    force=True,
 )
-
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,9 +20,6 @@ settings = get_settings()
 
 log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
 logging.getLogger("src").setLevel(log_level)
-
-# Silenciar warnings de provider del agent_framework
-logging.getLogger("agent_framework").setLevel(logging.WARNING)
 
 app = FastAPI(
     title="Delfos Multi-Agent System",

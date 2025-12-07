@@ -8,15 +8,15 @@ import time
 from typing import Dict, Any
 
 from azure.identity.aio import DefaultAzureCredential
-from agent_framework import MCPStreamableHTTPTool, ConcurrentBuilder
-from agent_framework_azure_ai import AzureAIAgentClient
-
+from agent_framework import MCPStreamableHTTPTool
+from agent_framework.anthropic import AnthropicClient
 from src.config.settings import get_settings
 from src.config.prompts import AgentPrompts
 from src.models import ChatResponse, SQLResult, VizResult, AgentOutput, FormattedResponse
 from src.services.logger import AgentLogger
 from src.agents.executor import run_single_agent
 from src.utils.json_parser import JSONParser
+from agent_framework_azure_ai import AzureAIAgentClient
 
 logger = logging.getLogger(__name__)
 
@@ -41,120 +41,90 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
             sse_read_timeout=settings.mcp_sse_timeout,
             approval_mode="never_require",
         ) as mcp:
-            
+
             # ---------------------------------------------------------
-            # STEP 1 & 2: INTENT DETECTION AND SQL GENERATION (PARALLEL)
+            # STEP 1: INTENT DETECTION
             # ---------------------------------------------------------
-            logger.info("Executing IntentAgent and SQLAgent in parallel using ConcurrentBuilder...")
+            logger.info("Executing IntentAgent...")
             
-            # Create both agents and execute in parallel using ConcurrentBuilder
             async with AzureAIAgentClient(
                 project_endpoint=settings.azure_ai_project_endpoint,
                 model_deployment_name=settings.intent_agent_model,
                 async_credential=credential,
             ) as intent_client:
-                async with AzureAIAgentClient(
-                    project_endpoint=settings.azure_ai_project_endpoint,
-                    model_deployment_name=settings.sql_agent_model,
-                    async_credential=credential,
-                ) as sql_client:
-                    intent_agent = intent_client.create_agent(
-                        name="IntentAgent",
-                        instructions=AgentPrompts.INTENT_AGENT,
-                    )
-                    sql_agent = sql_client.create_agent(
-                        name="SQLAgent",
-                        instructions=AgentPrompts.SQL_AGENT,
-                        tools=mcp,
-                    )
-                    
-                    # Build concurrent workflow
-                    workflow = ConcurrentBuilder().participants([intent_agent, sql_agent]).build()
-                    
-                    # Execute both agents in parallel with the same input
-                    parallel_start_time = time.time()
-                    from agent_framework import WorkflowOutputEvent, ChatMessage
-                    messages = []
-                    async for event in workflow.run_stream(message):
-                        if isinstance(event, WorkflowOutputEvent):
-                            if hasattr(event, "data"):
-                                for msg in event.data:
-                                    if hasattr(msg, "text") and msg.text:
-                                        messages.append(msg)
-                    parallel_elapsed_ms = (time.time() - parallel_start_time) * 1000
-                    
-                    # Extract results from messages
-                    if not messages:
-                        logger.error("Concurrent workflow did not return any messages")
-                        response.success = False
-                        response.message = "Error: Concurrent workflow did not return any messages"
-                        response.errors.append("Concurrent workflow did not return any messages")
-                        return response.model_dump()
-                    
-                    # Find messages from each agent by author_name
-                    raw_intent = ""
-                    raw_sql_result = ""
-                    for msg in messages:
-                        if hasattr(msg, "author_name") and hasattr(msg, "text"):
-                            if msg.author_name == "IntentAgent":
-                                raw_intent = msg.text
-                            elif msg.author_name == "SQLAgent":
-                                raw_sql_result = msg.text
-                    
-                    # Fallback: if author_name doesn't work, use order (first = IntentAgent, second = SQLAgent)
-                    if not raw_intent or not raw_sql_result:
-                        text_messages = [msg.text for msg in messages if hasattr(msg, "text") and msg.text]
-                        if len(text_messages) >= 2:
-                            raw_intent = text_messages[0]
-                            raw_sql_result = text_messages[1]
-                        elif len(text_messages) == 1:
-                            # Only one result, try to identify which one
-                            raw_intent = text_messages[0]
-                            raw_sql_result = text_messages[0]
-                    
-                    # Process IntentAgent results
-                    intent_data = JSONParser.extract_json(raw_intent)
-                    intent_elapsed_ms = parallel_elapsed_ms  # Both took the same time
-                    
-                    agent_logger.log_agent_response(
-                        agent_name="IntentAgent",
-                        raw_response=raw_intent,
-                        parsed_response=intent_data,
-                        input_text=message,
-                        execution_time_ms=intent_elapsed_ms,
-                    )
-                    
-                    response.agent_outputs.append(AgentOutput(
-                        agent_name="IntentAgent",
-                        raw_response=raw_intent,
-                        parsed_response=intent_data,
-                        execution_time_ms=intent_elapsed_ms,
-                        input_text=message,
-                    ))
-                    
-                    intent = intent_data.get("intent", "nivel_puntual")
-                    response.intent = intent
-                    logger.info(f"Intent detected: {intent}")
-                    
-                    # Process SQLAgent results
-                    sql_json = JSONParser.extract_json(raw_sql_result)
-                    sql_elapsed_ms = parallel_elapsed_ms  # Both took the same time
-                    
-                    agent_logger.log_agent_response(
-                        agent_name="SQLAgent",
-                        raw_response=raw_sql_result,
-                        parsed_response=sql_json,
-                        input_text=message,
-                        execution_time_ms=sql_elapsed_ms,
-                    )
-                    
-                    response.agent_outputs.append(AgentOutput(
-                        agent_name="SQLAgent",
-                        raw_response=raw_sql_result,
-                        parsed_response=sql_json,
-                        execution_time_ms=sql_elapsed_ms,
-                        input_text=message,
-                    ))
+                intent_agent = intent_client.create_agent(
+                    name="IntentAgent",
+                    instructions=AgentPrompts.INTENT_AGENT,
+                )
+                
+                # Execute IntentAgent
+                intent_start_time = time.time()
+                raw_intent = await run_single_agent(intent_agent, message)
+                intent_elapsed_ms = (time.time() - intent_start_time) * 1000
+                
+                # Process IntentAgent results
+                intent_data = JSONParser.extract_json(raw_intent)
+                
+                agent_logger.log_agent_response(
+                    agent_name="IntentAgent",
+                    raw_response=raw_intent,
+                    parsed_response=intent_data,
+                    input_text=message,
+                    execution_time_ms=intent_elapsed_ms,
+                )
+                
+                response.agent_outputs.append(AgentOutput(
+                    agent_name="IntentAgent",
+                    raw_response=raw_intent,
+                    parsed_response=intent_data,
+                    execution_time_ms=intent_elapsed_ms,
+                    input_text=message,
+                ))
+                
+                intent = intent_data.get("intent", "nivel_puntual")
+                response.intent = intent
+                logger.debug(f"Intent detected: {intent}")
+            
+            # ---------------------------------------------------------
+            # STEP 2: SQL GENERATION
+            # ---------------------------------------------------------
+            logger.info("Executing SQLAgent...")
+            
+            sql_client = AnthropicClient(
+                model_id=settings.sql_agent_model,
+                api_key=settings.anthropic_api_key,
+            )
+            sql_agent = sql_client.create_agent(
+                name="SQLAgent",
+                instructions=AgentPrompts.SQL_AGENT,
+                tools=mcp,
+                max_tokens=8192,
+                response_format=SQLResult
+            )
+                
+            # Execute SQLAgent
+            sql_start_time = time.time()
+            raw_sql_result = await run_single_agent(sql_agent, message)
+            sql_elapsed_ms = (time.time() - sql_start_time) * 1000
+            
+            # Process SQLAgent results
+            sql_json = JSONParser.extract_json(raw_sql_result)
+            
+            agent_logger.log_agent_response(
+                agent_name="SQLAgent",
+                raw_response=raw_sql_result,
+                parsed_response=sql_json,
+                input_text=message,
+                execution_time_ms=sql_elapsed_ms,
+            )
+            
+            response.agent_outputs.append(AgentOutput(
+                agent_name="SQLAgent",
+                raw_response=raw_sql_result,
+                parsed_response=sql_json,
+                execution_time_ms=sql_elapsed_ms,
+                input_text=message,
+            ))
 
             # Check if SQLAgent returned valid JSON with results
             if sql_json and "resultados" in sql_json:
@@ -177,12 +147,12 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                 response.errors.append("SQLAgent could not complete the query successfully")
                 logger.warning(f"SQLAgent failed - no valid results returned. Response: {raw_sql_result[:200]}...")
                 return response.model_dump()
-
+            
             # ---------------------------------------------------------
             # STEP 3: VISUALIZATION (VIZ AGENT - Conditional)
             # ---------------------------------------------------------
             if intent == "requiere_visualizacion" and response.sql_data:
-                logger.info("Starting VizAgent (condition met)...")
+                logger.debug("Starting VizAgent (condition met)...")
                 
                 async with AzureAIAgentClient(
                     project_endpoint=settings.azure_ai_project_endpoint,
@@ -388,7 +358,6 @@ async def run_workflow(message: str, user_id: str = "anonymous") -> Dict[str, An
                             formatted_message = "\n".join(lines[1:-1]) if len(lines) > 2 else formatted_message
                         response.message = formatted_message if formatted_message else response.sql_data.resumen
                         logger.warning("FormatAgent did not return valid JSON, using fallback")
-
             response.success = True
 
     except Exception as e:

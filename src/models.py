@@ -11,8 +11,8 @@ class ChatRequest(BaseModel):
 class IntentResult(BaseModel):
     user_question: str
     intent: str
-    tipo_patron: Optional[str] = None  # A, B, C, D, E, F, G, H, I, J, K, L, M, N
-    arquetipo: Optional[str] = None  # Comparación, Relación, Proyección, Simulación
+    tipo_patron: Optional[str] = None
+    arquetipo: Optional[str] = None
     razon: Optional[str] = None
 
 class SQLResult(BaseModel):
@@ -29,8 +29,8 @@ class VizResult(BaseModel):
     data_points: List[Dict[str, Any]]
     powerbi_url: str
     run_id: Optional[str] = None
-    image_base64: Optional[str] = None  # Base64 encoded chart image
-    image_url: Optional[str] = None  # URL to the chart image
+    image_base64: Optional[str] = None  
+    image_url: Optional[str] = None
 
 class AgentOutput(BaseModel):
     """Output from an individual agent."""
@@ -58,6 +58,6 @@ class ChatResponse(BaseModel):
     sql_data: Optional[SQLResult] = None
     viz_data: Optional[VizResult] = None
     formatted_response: Optional[FormattedResponse] = None
-    agent_outputs: List[AgentOutput] = []  # Outputs from each executed agent
+    agent_outputs: List[AgentOutput] = []
     errors: List[str] = []
 

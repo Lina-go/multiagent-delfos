@@ -59,7 +59,6 @@ async def get_graph(
         HTTPException: 404 if image not found, 500 if error retrieving
     """
     try:
-        # Parse data points if provided
         data_points = None
         if data:
             try:
